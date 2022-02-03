@@ -4,6 +4,8 @@
 #include <QFile>
 #include <string.h>
 
+#include "lffdebugtools.h"
+
 extern "C"{
 //设备相关API
 #include <libavdevice/avdevice.h>
@@ -34,6 +36,26 @@ lAudioRecorder::~lAudioRecorder()
     this->wait();
 }
 
+AVCodecContext* lAudioRecorder::create_aac_encoder()
+{
+    AVCodec* encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    AVCodecContext* codecCtx = avcodec_alloc_context3(encoder);
+
+    codecCtx->sample_fmt = AV_SAMPLE_FMT_S16;               //输入音频的采样格式
+    codecCtx->channel_layout = AV_CH_LAYOUT_STEREO;         //输入音频的通道布局
+    codecCtx->channels = 2;                                 //输入音频的通道数
+    codecCtx->sample_rate = 44100;                          //输入音频的采样率
+    codecCtx->bit_rate = 0;// AAC_LC:128K, AAC HE:64K, AAC HE V2:32K  比特率
+    codecCtx->profile = FF_PROFILE_AAC_HE_V2; // bit_rate must be 0, if set profile
+
+    if (avcodec_open2(codecCtx, encoder, nullptr) < 0)
+    {
+        return nullptr;
+    }
+
+    return codecCtx;
+}
+
 void lAudioRecorder::run()
 {
         AVInputFormat* iformat = av_find_input_format(FMT_NAME);
@@ -46,26 +68,28 @@ void lAudioRecorder::run()
             return;
         }
 
-
+//开启音频输入
         int ret = avformat_open_input(&fmtCtx,        //上下文
                                       DEVICE_NAME, //设备名
                                       iformat,     //格式
                                       nullptr);    //选项
 
         if(ret < 0){
-            char errbuf[1024] = {0};
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug()<< QString("opne input error, num:%1, msg:%2").arg(ret).arg(errbuf);
+//            char errbuf[1024] = {0};
+//            av_strerror(ret, errbuf, sizeof(errbuf));
+//            qDebug()<< QString("opne input error, num:%1, msg:%2").arg(ret).arg(errbuf);
+            lFFDebugTools::ffPrintError(ret, "opne input error");
             return;
         }
 
-
+//音频数据写入磁盘
         if (!pcmdata.open(QIODevice::WriteOnly)){
             qDebug()<<"open file failed";
             avformat_close_input(&fmtCtx);
             return;
         }
 
+//音频数据重采样配置
         SwrContext* swrCtx = nullptr;
         swrCtx = swr_alloc_set_opts(nullptr,                //ctx
                                     AV_CH_LAYOUT_STEREO,    //输出channel布局
@@ -83,11 +107,13 @@ void lAudioRecorder::run()
         }
 
         if( ( ret = swr_init(swrCtx) ) < 0){
-            char errbuf[1024] = {0};
-            av_strerror(ret, errbuf, sizeof(errbuf));
-            qDebug()<<QString("swr init error, num:%1, msg:%2").arg(ret).arg(errbuf);
+            lFFDebugTools::ffPrintError(ret, "swr init error");
+//            char errbuf[1024] = {0};
+//            av_strerror(ret, errbuf, sizeof(errbuf));
+//            qDebug()<<QString("swr init error, num:%1, msg:%2").arg(ret).arg(errbuf);
         }
 
+//创建输入缓冲区数组
         // INPUT AUDIO DATA
         uint8_t** srcData = nullptr;
         int srclineSize = 0;
@@ -98,6 +124,7 @@ void lAudioRecorder::run()
                                            AV_SAMPLE_FMT_S16,   //输入采样格式
                                            0);
 
+//创建输出缓冲区数组
         // OUTPUT AUDIO DATA
         uint8_t** dstData = nullptr;
         int dstlineSize = 0;

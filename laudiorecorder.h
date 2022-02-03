@@ -22,6 +22,9 @@ public:
     ~lAudioRecorder();
 
 public:
+    AVCodecContext* encoder();
+
+private:
     void run() override;
 public slots:
 

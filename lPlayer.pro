@@ -17,11 +17,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     laudiorecorder.cpp \
+    lffdebugtools.cpp \
     main.cpp \
     mainwindow.cpp
 
 HEADERS += \
     laudiorecorder.h \
+    lffdebugtools.h \
     mainwindow.h
 
 FORMS += \
